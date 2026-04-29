@@ -16916,6 +16916,23 @@ LogicalProject(EXPR$0=[EXISTS(ARRAY(1), (X) -> true)])
 ]]>
     </Resource>
   </TestCase>
+  <TestCase name="testReduceLambdaBodyConstantFolding">
+    <Resource name="sql">
+      <![CDATA[select "EXISTS"(ARRAY[1, 2, 3], x -> x > 1 + 2)]]>
+    </Resource>
+    <Resource name="planBefore">
+      <![CDATA[
+LogicalProject(EXPR$0=[EXISTS(ARRAY(1, 2, 3), (X) -> >(X, +(1, 2)))])
+  LogicalValues(tuples=[[{ 0 }]])
+]]>
+    </Resource>
+    <Resource name="planAfter">
+      <![CDATA[
+LogicalProject(EXPR$0=[EXISTS(ARRAY(1, 2, 3), (X) -> >(X, 3))])
+  LogicalValues(tuples=[[{ 0 }]])
+]]>
+    </Resource>
+  </TestCase>
   <TestCase name="testReduceNestedCaseWhen">
     <Resource name="sql">
       <![CDATA[select sal

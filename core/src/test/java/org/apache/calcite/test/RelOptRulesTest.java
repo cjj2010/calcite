@@ -12308,4 +12308,17 @@ class RelOptRulesTest extends RelOptTestBase {
         .withRule(CoreRules.PROJECT_FILTER_VALUES_MERGE)
         .checkUnchanged();
   }
+
+  /** Test case for
+   * <a href="https://issues.apache.org/jira/browse/CALCITE-7497">[CALCITE-7497]
+   * Enable Lambda supports constant folding</a>.
+   */
+  @Test void testReduceLambdaBodyConstantFolding() {
+    final String sql = "select \"EXISTS\"(ARRAY[1, 2, 3], x -> x > 1 + 2)";
+    sql(sql)
+        .withFactory(f ->
+            f.withOperatorTable(opTab ->
+                SqlValidatorTest.operatorTableFor(SqlLibrary.SPARK)))
+        .withRule(CoreRules.PROJECT_REDUCE_EXPRESSIONS).check();
+  }
 }
