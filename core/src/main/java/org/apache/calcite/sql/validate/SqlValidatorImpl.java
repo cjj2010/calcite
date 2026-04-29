@@ -7499,7 +7499,8 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
       final SqlIdentifier identifier = (SqlIdentifier) selectItem;
       if (!identifier.isSimple()) {
-        if (!validator.config().conformance().allowQualifyingCommonColumn()) {
+        if (!validator.config().conformance().allowQualifyingCommonColumn()
+            && identifier.getParserPosition().getLineNum() != 0) {
           validateQualifiedCommonColumn((SqlJoin) from, identifier, scope, validator);
         }
         return selectItem;
@@ -7530,7 +7531,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
               final SqlIdentifier exp =
                   new SqlIdentifier(
                       ImmutableList.of(child.name, name),
-                      identifier.getParserPosition());
+                      SqlParserPos.ZERO);
               qualifiedNode.add(exp);
             }
           }
