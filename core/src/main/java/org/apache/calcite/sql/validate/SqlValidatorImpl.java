@@ -642,6 +642,31 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
   }
 
+  /** Validates that a SQL node tree does not contain qualified references
+   * to common columns in a JOIN USING or NATURAL JOIN context.
+   * This is called before identifier expansion to catch user-written
+   * qualified common columns in conformances where they are disallowed
+   * (e.g. Oracle, Presto).
+   *
+   * @param nodeList The list of SQL nodes to check
+   * @param join     The JOIN node containing USING/NATURAL condition
+   * @param scope    The select scope for resolving identifiers
+   */
+  private void validateNoQualifiedCommonColumns(SqlNodeList nodeList,
+      SqlJoin join, SelectScope scope) {
+    for (SqlNode item : nodeList) {
+      item.accept(new SqlShuttle() {
+        @Override public SqlNode visit(SqlIdentifier id) {
+          if (!id.isSimple()) {
+            validateQualifiedCommonColumn(join, id, scope,
+                SqlValidatorImpl.this);
+          }
+          return id;
+        }
+      });
+    }
+  }
+
   private boolean expandStar(List<SqlNode> selectItems, Set<String> aliases,
       PairList<String, RelDataType> fields, boolean includeSystemVars,
       SelectScope scope, SqlNode node) {
@@ -5088,6 +5113,17 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
     // expand the expression in group list.
     List<SqlNode> expandedList = new ArrayList<>();
+    // Validate that GROUP BY items do not qualify common columns
+    // in conformances where it is disallowed (e.g. Oracle, Presto).
+    // This must run before expansion, because expansion generates
+    // qualified identifiers that should not trigger this validation.
+    if (!config.conformance().allowQualifyingCommonColumn()) {
+      final SqlNode from = select.getFrom();
+      if (from instanceof SqlJoin) {
+        validateNoQualifiedCommonColumns(groupList,
+            (SqlJoin) from, getRawSelectScopeNonNull(select));
+      }
+    }
     for (SqlNode groupItem : groupList) {
       SqlNode expandedItem =
           extendedExpand(groupItem, groupScope, select, Clause.GROUP_BY);
@@ -5251,6 +5287,18 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     final PairList<String, RelDataType> fieldList = PairList.of();
     // Populated during select expansion when SqlConformance.isSelectAlias != UNSUPPORTED
     final Map<String, SqlNode> expansions = new HashMap<>();
+
+    // Validate that SELECT items do not qualify common columns
+    // in conformances where it is disallowed (e.g. Oracle, Presto).
+    // This must run before expansion, because expansion generates
+    // qualified identifiers that should not trigger this validation.
+    if (!config().conformance().allowQualifyingCommonColumn()) {
+      final SqlNode from = select.getFrom();
+      if (from instanceof SqlJoin) {
+        validateNoQualifiedCommonColumns(selectItems,
+            (SqlJoin) from, getRawSelectScopeNonNull(select));
+      }
+    }
 
     for (SqlNode selectItem : selectItems) {
       if (selectItem instanceof SqlSelect) {
@@ -7499,10 +7547,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
 
       final SqlIdentifier identifier = (SqlIdentifier) selectItem;
       if (!identifier.isSimple()) {
-        if (!validator.config().conformance().allowQualifyingCommonColumn()
-            && identifier.getParserPosition().getLineNum() != 0) {
-          validateQualifiedCommonColumn((SqlJoin) from, identifier, scope, validator);
-        }
+        // No validation here - just return unchanged
         return selectItem;
       }
 
