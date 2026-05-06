@@ -5275,6 +5275,19 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     }
   }
 
+  /** Validates that SELECT items do not qualify common columns
+   * in conformances where it is disallowed (e.g. Oracle, Presto). */
+  private void validateSelectCommonColumns(SqlNodeList selectItems,
+      SqlSelect select) {
+    if (!config().conformance().allowQualifyingCommonColumn()) {
+      final SqlNode from = select.getFrom();
+      if (from instanceof SqlJoin) {
+        validateNoQualifiedCommonColumns(selectItems,
+            (SqlJoin) from, getRawSelectScopeNonNull(select));
+      }
+    }
+  }
+
   protected RelDataType validateSelectList(final SqlNodeList selectItems,
       SqlSelect select, RelDataType targetRowType) {
     // First pass, ensure that aliases are unique. "*" and "TABLE.*" items
@@ -5292,13 +5305,7 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
     // in conformances where it is disallowed (e.g. Oracle, Presto).
     // This must run before expansion, because expansion generates
     // qualified identifiers that should not trigger this validation.
-    if (!config().conformance().allowQualifyingCommonColumn()) {
-      final SqlNode from = select.getFrom();
-      if (from instanceof SqlJoin) {
-        validateNoQualifiedCommonColumns(selectItems,
-            (SqlJoin) from, getRawSelectScopeNonNull(select));
-      }
-    }
+    validateSelectCommonColumns(selectItems, select);
 
     for (SqlNode selectItem : selectItems) {
       if (selectItem instanceof SqlSelect) {
